@@ -1,0 +1,323 @@
+! head x-coordinate
+L0 160
+! head y-coordinate
+L1 100
+! initial direction set to the right
+L2 2
+! starting length of the snake
+L3 2
+! food x-coordinate
+L4 20
+! food y-coordinate
+L5 20
+! length of movement, described in terms of pixels
+L6 5
+! holds last direction moved in, to prevent direct double backs
+L7 2
+! temporary variables needed for calculation and storage
+L8 0
+! temporary variables needed for calculation and storage
+L9 0
+! temporary variables needed for calculation and storage
+L10 0
+! temporary variables needed for calculation and storage
+L11 0
+! more temporary variables needed for calculation and storage
+L12 0
+L13 0
+L14 0
+L15 0
+L16 0
+! setting x-location for the head of the snake
+SET 100 L0
+! setting y-location for the head of the snake, super far out so there are no memory collisions
+SET 3000 L1
+
+
+! drawing the figure of the snake (segments start directly behind the head)
+SET 100 155
+SET 3000 100
+SET 101 150
+SET 3001 100
+
+! x-coordinate for food: we pick random grid column index, add padding, then multiply by 5 since snake moves by 5 pixels
+RAND L4 59          
+L4 + L4 2   
+! multiplication works like this:
+L10 L4              
+L4 + L4 L10         
+L4 + L4 L10         
+L4 + L4 L10        
+L4 + L4 L10         
+
+! y-coordinate for food: we pick random grid row index, add padding, then multiply by 5 since snake moves by 5 pixels
+RAND L5 35
+L5 + L5 2           
+L11 L5              
+L5 + L5 L11
+L5 + L5 L11 
+L5 + L5 L11
+L5 + L5 L11 
+
+! movement is where the game mechanics from the key input is factored in
+GAME_LOOP:
+
+! we get the input from the key press
+KEY L2
+
+! the snake can't turn 180 degrees into itself. opposite directions differ by two
+! if the new key is opposite to the way we last moved, we ignore it and keep going the old way
+L10 - L2 L7
+L10 - L10 2
+JMP0 L10 KEEP_DIR
+L10 - L7 L2
+L10 - L10 2
+JMP0 L10 KEEP_DIR
+JMP DIR_OK
+KEEP_DIR:
+L2 L7
+DIR_OK:
+
+! remember the direction
+L7 L2
+
+! erase the old head of the snake
+PIX L0 L1 0
+
+! this calculates the address of the last body segment
+L8 - L3 1
+
+! this gets its x-coordinate
+L9 + L8 100
+GET L12 L9
+
+! this gets its y-coordinate
+L9 + L8 3000
+GET L13 L9
+
+! this saves the old tail position before shifting (for growth purposes)
+L15 L12
+L16 L13
+
+! erase the old tail
+PIX L12 L13 0
+
+! remember the direction we are actually moving in
+L7 L2
+
+! this is the shifting logic for the whole body segment
+L8 - L3 1
+
+SHIFT_LOOP:
+! if index is zero, copy the head. this is for when we start the snake movement
+! L8 stores the pixel/segment we're currently updating
+JMP0 L8 COPY_HEAD
+
+! as a high level overview, the shift algo basically starts from the tail and sends the tail value
+! to the next coordinate it needs to be at using temp vars.
+! y-coordinates follow a similar pattern, but they're stored starting L3000
+! here we calculate where a given pixel goes next
+
+! the current segment/pixel we're updating, it's x-coordinate is stored at L[pixel_number + 100]
+L9 + L8 100
+
+! here we find where a given segment came from
+! L10 now contains the location of the previous segment's x-coordinate.
+L10 - L9 1
+! now we know where we're going to assign the coordinate to, and where we're going to assign it from
+
+! we retrieve the previous segment's coordinate
+GET L11 L10
+
+! then we store it in the place it's supposed to go.
+SET L9 L11
+! the get and the set basically take the temporary stored variables, and assigns them.
+! we did our calculations with them, and this step modfies the actual list memory so now the snake has actually been modified.
+
+! y-coordinates are modified very similarly
+L9 + L8 3000
+L10 - L9 1
+GET L11 L10
+SET L9 L11
+L8 - L8 1
+JMP SHIFT_LOOP
+
+COPY_HEAD:
+! Store the head's old position in segment 0
+SET 100 L0
+SET 3000 L1
+
+! game mechanics starts here
+! since up is least, we check up first
+! the first line initially checks if we need to move up or if the command was something else. 
+! if it was something else, we go to that key press process block
+L10 - L2 1
+JMP+ L10 CHECK_RIGHT
+
+! this command updates the location of the snake's head and then finishes the loop for a single move
+L1 - L1 L6
+JMP MOVE_DONE
+
+! since right is second least, we check right second
+CHECK_RIGHT:
+L10 - L2 2
+JMP+ L10 CHECK_DOWN
+L0 + L0 L6
+JMP MOVE_DONE
+
+! since down is penultimate, we check right third
+CHECK_DOWN:
+L10 - L2 3
+JMP+ L10 CHECK_LEFT
+L1 + L1 L6
+JMP MOVE_DONE
+
+! since left is final/greatest, we check left last
+CHECK_LEFT:
+L0 - L0 L6
+
+! we finish when the key press has been read and moved
+MOVE_DONE:
+
+! boundary checks begin here
+! this checks if we've crossed the left wall, so if x < 0
+L10 - 0 L0
+JMP+ L10 GAME_OVER
+
+! this checks whether the head crossed the right wall, so if x >= 320
+L10 - L0 319
+JMP+ L10 GAME_OVER
+
+! this checks whether the head crossed top wall, so if y < 0
+L10 - 0 L1
+JMP+ L10 GAME_OVER
+
+! this checks whether the head crossed bottom wall, so if y >= 200
+L10 - L1 199
+JMP+ L10 GAME_OVER
+
+
+! self-collision check starts from here
+! start checking from segment 0
+L8 0
+
+SELF_COLLISION_LOOP:
+
+! this is the check to stop when we've checked all body segments.
+! it's basically a counter to see if we've check all the segments of the snake or not
+L9 - L3 L8
+JMP0 L9 SELF_COLLISION_DONE
+
+! this is the calculation of the location of this segment's x-coordinate.
+! it's functionally very similar to how we wrote the movement/shifting logic
+L10 + L8 100
+GET L12 L10
+
+! this is the calculation of the location of this segment's y-coordinate.
+L10 + L8 3000
+GET L13 L10
+
+! we compare the head's x-coordinate to this segment's x-coordinate to see if they match
+L14 - L0 L12
+
+! if the coordinate does not match, skip to the next segment
+JMP+ L14 NEXT_SEGMENT
+L14 - L12 L0
+JMP+ L14 NEXT_SEGMENT
+
+! getting here means x matches
+! now compare the y-coordinates. this tells us if there is a self-collision if both match
+L14 - L1 L13
+
+! if y does not match, there is no collison, and we skip to the next segment
+JMP+ L14 NEXT_SEGMENT
+L14 - L13 L1
+JMP+ L14 NEXT_SEGMENT
+
+! if both x and y coordinates match, then the head collided with the body
+JMP GAME_OVER
+
+! we move our counter to the next body segment
+NEXT_SEGMENT:
+L8 + L8 1
+JMP SELF_COLLISION_LOOP
+
+SELF_COLLISION_DONE:
+
+! food detection and growth from said food detection starts here
+! first we compare the x-coordinate of the food and the head. if it matches, we check the y-coordinate.
+L14 - L0 L4
+JMP0 L14 CHECK_FOOD_Y
+
+! if the x-coordinates don't match, we skip
+JMP FOOD_DONE
+
+! then we check the y-coordinate of the head with the y-coordinate of the food. if it matches, we eat
+CHECK_FOOD_Y:
+L14 - L1 L5
+JMP0 L14 EAT_FOOD
+
+! if Y doesn't match, we skip the food consumption
+JMP FOOD_DONE
+
+EAT_FOOD:
+! here we calculate the x location of the new segment once food is eaten
+! L3 is the old body length, so it's also the new segment's index
+L9 + L3 100
+
+! we store the old tail's x-coordinate
+SET L9 L15
+
+! we do similar calculations for y
+L9 + L3 3000
+SET L9 L16
+
+! increase the number of body segments, since now food has been consumed and snake has grown
+L3 + L3 1
+
+! this borrows code from the initialization to generate the new food coordinate
+RAND L4 59
+L4 + L4 2
+L10 L4
+L4 + L4 L10
+L4 + L4 L10
+L4 + L4 L10
+L4 + L4 L10
+RAND L5 35
+L5 + L5 2
+L11 L5
+L5 + L5 L11
+L5 + L5 L11
+L5 + L5 L11
+L5 + L5 L11
+
+FOOD_DONE:
+
+! rendering goes here.
+! we first draw the head of the snake.
+! then we use a loop with a counter to render the full length of the body of the snake at their coordinates
+
+PIX L0 L1 3
+PIX L4 L5 2
+L8 0
+
+DRAW_BODY:
+L9 - L3 L8
+JMP0 L9 DRAW_DONE
+L10 + L8 100
+GET L12 L10
+L10 + L8 3000
+GET L13 L10
+PIX L12 L13 1
+L8 + L8 1
+JMP DRAW_BODY
+
+DRAW_DONE:
+RENDER
+WAIT 100
+JMP GAME_LOOP
+
+! this ends the game when there is a wall or self collision
+GAME_OVER:
+WAIT 100
+JMP GAME_OVER
